@@ -26,6 +26,18 @@ def getUser(userid=None):
     else:
         return jsonify({'message': 'User not found'}), 404
 
+# Create user
+@main.route('/user/', methods=['POST'])
+def createUser(username=None):
+    conn = sqlite3.connect(current_app.config['DATABASE'])
+    cursor = conn.cursor()
+
+    data = request.get_json()
+    cursor.execute("INSERT INTO users (name, email) VALUES (?, ?)", (data['name'], data['email']))
+    conn.commit()
+
+    return jsonify({'message': 'User created', 'id': cursor.lastrowid}), 201 # Return 201 Created with new user ID
+
 # Logging
 
 @main.before_request
