@@ -3,64 +3,74 @@ from flask import Blueprint, request, jsonify, current_app
 import traceback
 
 # Define a blueprint for the main application routes
-main = Blueprint('main', __name__)
+api = Blueprint('api', __name__)  # More descriptive name
 
 # --- User API Endpoints ---
 
-# GET /user/<userid>: Retrieves a user by their ID.
-@main.route('/user/<userid>', methods=['GET'])
-def getUser(userid=None):
-    conn = sqlite3.connect(current_app.config['DATABASE'])
-    cursor = conn.cursor()
-    if userid is None:
+# GET /user/<user_id>: Retrieves a user by their ID.
+@api.route('/user/<user_id>', methods=['GET'])
+def get_user(user_id=None):
+    db_connection = sqlite3.connect(current_app.config['DATABASE'])  # More descriptive name
+    cursor = db_connection.cursor()
+    if user_id is None:
         return jsonify({'error': 'User ID is required'}), 400
 
     # Execute the SQL query to fetch the user
-    cursor.execute("SELECT * FORM users WHERE id = ?", (userid,))
-    user = cursor.fetchone()
+    cursor.execute("SELECT * FORM users WHERE id = ?", (user_id,))
+    user_data = cursor.fetchone()
 
-    if user:
+    if user_data:
         return jsonify({
-            'id': user[0],
-            'name': user[1],
-            'email': user[2]
+            'id': user_data[0],
+            'name': user_data[1],
+            'email': user_data[2]
         })
     else:
         return jsonify({'message': 'User not found'}), 404 # Return 404 Not Found if the user is not found
 
 # POST /user/: Creates a new user.
-@main.route('/user/', methods=['POST'])
-def createUser(username=None):
-    conn = sqlite3.connect(current_app.config['DATABASE'])
-    cursor = conn.cursor()
+@api.route('/user/', methods=['POST'])
+def create_user():
+    db_connection = sqlite3.connect(current_app.config['DATABASE'])
+    cursor = db_connection.cursor()
 
-    data = request.get_json()
-    cursor.execute("INSERT INTO users (name, email) VALUES (?, ?)", (data['name'], data['email']))
-    conn.commit()
-
-    return jsonify({'message': 'User created', 'id': cursor.lastrowid}), 201 # Return 201 Created with the new user ID
+    user_data = request.get_json()
+    try:
+        cursor.execute("INSERT INTO users (name, email) VALUES (?, ?)", (user_data['name'], user_data['email']))
+        db_connection.commit()
+        user_id = cursor.lastrowid
+        return jsonify({'message': 'User created', 'id': user_id}), 201  # Return 201 Created with the new user ID
+    except KeyError as e:
+        return jsonify({'error': f'Missing required field: {e}'}), 400
+    except Exception as e:
+        db_connection.rollback() # Rollback on error
+        return jsonify({'error': 'Failed to create user'}), 500
+    finally:
+        db_connection.close()
 
 # Logging Middleware
 
 # Before request hook to initialize exception logging variable
-@main.before_request
-def log_request():
+@api.before_request
+def init_exception_log():
     """Initializes a variable to store potential exceptions during the request."""
-    request.log_exception = ''
+    request.exception_log = ''  # More descriptive name
+
 
 # After request hook to log request details
-@main.after_request
-def log_response(response):
+@api.after_request
+def log_request_details(response):
     """Logs the request method, path, status code, and any exceptions that occurred."""
-    current_app.logger.info(f"{request.method} {request.path} {response.status_code} - {request.log_exception}")
+    current_app.logger.info(f"{request.method} {request.path} {response.status_code} - {request.exception_log}")
     return response
 
 # Error handler for uncaught exceptions
-@main.errorhandler(Exception)
-def handle_exception(e):
+@api.errorhandler(Exception)
+def handle_uncaught_exception(error):
     """
     Handles uncaught exceptions and logs the traceback.
     Returns a JSON response with an error message and 500 Internal Server Error status code.
     """
-    request.log_exception = traceback.format_exc()
+    request.exception_log = traceback.format_exc()
+    current_app.logger.error(f"Uncaught exception: {request.exception_log}") #Log exception for debugging
     return jsonify({'error': 'An internal server error occurred'}), 500
