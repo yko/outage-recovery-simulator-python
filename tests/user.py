@@ -1,6 +1,7 @@
 import unittest
 from app import create_app
 import random
+from app.logger import logger
 
 class TestUserAPI(unittest.TestCase):
 
@@ -22,7 +23,7 @@ class TestUserAPI(unittest.TestCase):
                 data = response.get_json()
                 self.assertEqual(data['id'], 1)
             except Exception as e:
-                print(f"Error in sampling attempt: {e}")
+                logger.error(f"Error in sampling attempt: {e}", extra={"error": str(e)})
 
 if __name__ == '__main__':
     unittest.main(exit=False)

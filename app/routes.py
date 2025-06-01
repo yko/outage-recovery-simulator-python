@@ -1,6 +1,7 @@
 import sqlite3
 from flask import Blueprint, request, jsonify, current_app
 import traceback
+from .logger import logger
 
 main = Blueprint('main', __name__)
 
@@ -46,10 +47,14 @@ def log_request():
 
 @main.after_request
 def log_response(response):
-    current_app.logger.info(f"{request.method} {request.path} {response.status_code} - {request.log_exception}")
+    logger.info(f"{request.method} {request.path} {response.status_code}", 
+                extra={"path": request.path, "method": request.method, "status_code": response.status_code})
     return response
 
 @main.errorhandler(Exception)
 def handle_exception(e):
-    request.log_exception = traceback.format_exc()
+    error_traceback = traceback.format_exc()
+    request.log_exception = error_traceback
+    logger.error(f"Exception occurred: {str(e)}", 
+                 extra={"error": str(e), "traceback": error_traceback})
     return jsonify({'error': 'An internal server error occurred'}), 500 # Return 500 Error
